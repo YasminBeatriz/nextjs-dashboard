@@ -6,6 +6,9 @@ import postgres from "postgres";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
+import { signIn } from "@/auth";
+import { AuthError } from "next-auth";
+
 export type State = {
   errors?: {
     customerId?: string[];
@@ -38,14 +41,17 @@ export const createInvoice = async (prevState: State, formData: FormData) => {
     amount: formData.get("amount"),
     status: formData.get("status"),
   });
-  console.log('validatedFields', { success: validatedFields.success, error: validatedFields.error?.flatten().fieldErrors });
+  console.log("validatedFields", {
+    success: validatedFields.success,
+    error: validatedFields.error?.flatten().fieldErrors,
+  });
   if (!validatedFields.success) {
     return {
       errors: validatedFields.error.flatten().fieldErrors,
       message: "Missing fields. Failed to create invoice",
     };
   }
-  const { customerId, amount, status} = validatedFields.data;
+  const { customerId, amount, status } = validatedFields.data;
   const amountInCents = amount * 100;
   const date = new Date().toISOString().split("T").at(0) ?? "";
   try {
@@ -79,11 +85,29 @@ export const updateInvoice = async (id: string, formData: FormData) => {
 };
 
 export const deleteInvoice = async (id: string) => {
-  throw new Error("Error deleting invoice");
   try {
     await sql`DELETE from invoices WHERE id = ${id}`;
   } catch (e) {
     console.error(`Error deleting invoice: ${e}`);
   }
   revalidatePath("/dashboard/invoices");
+};
+
+export const authenticate = async (
+  prevState: string | undefined,
+  formData: FormData
+) => {
+  try {
+    await signIn("credentials", formData);
+  } catch (error) {
+    if (error instanceof AuthError) {
+      switch (error.type) {
+        case "CredentialsSignin":
+          return "Invalid credentials.";
+        default:
+          return "Something went wrong.";
+      }
+    }
+    throw error;
+  }
 };
